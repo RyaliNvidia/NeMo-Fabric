@@ -250,6 +250,10 @@ until { true >/dev/tcp/127.0.0.1/"${GATEWAY_PORT}"; } 2>/dev/null; do
   sleep 1
 done
 
+if declare -F configure_workload_gateway >/dev/null; then
+  configure_workload_gateway
+fi
+
 run_consumer() {
   OPENSHELL_FABRIC_SANDBOX_STATE_FILE="${FABRIC_SANDBOX_STATE_FILE}" \
     VIRTUAL_ENV="${DEMO_PYTHON_ENV}" UV_PROJECT_ENVIRONMENT="${DEMO_PYTHON_ENV}" \
