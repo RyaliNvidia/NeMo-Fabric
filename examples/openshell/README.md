@@ -10,7 +10,8 @@ the normal NeMo Fabric SDK lifecycle in the consumer. The agent and its adapter
 run inside the sandbox with `fabric-agent-ctl serve`; the consumer calls the
 provider through the SDK. Start with the [minimal SDK echo example](../openshell_sdk/README.md)
 to see the complete host-to-sandbox path, then explore the [Code Review](../code_review_agent/README.md)
-example.
+and [custom LangGraph](../langgraph_custom_agent/README.md#run-the-custom-agent-in-openshell)
+examples.
 
 ## Requirements
 
