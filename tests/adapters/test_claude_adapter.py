@@ -29,6 +29,7 @@ from claude_agent_sdk import ResultMessage
 from claude_agent_sdk import SystemMessage
 from claude_agent_sdk import TextBlock
 from claude_agent_sdk._errors import MessageParseError
+from claude_agent_sdk._internal.transport.subprocess_cli import SubprocessCLITransport
 from nemo_fabric_adapter_contract.models import AgentConfig
 from nemo_fabric_adapter_contract.models import AgentRunRequest
 from nemo_fabric_adapter_contract.models import AgentRunResult
@@ -187,6 +188,14 @@ def test_claude_descriptor_is_narrow_and_versioned():
                     },
                     "default": [],
                     "description": "Claude settings scopes to load.",
+                },
+                "max_buffer_size": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": (
+                        "Maximum size in bytes of one Claude Code stdout JSON "
+                        "message. Omit to use the SDK default."
+                    ),
                 },
                 "max_budget_usd": {
                     "type": "number",
@@ -1734,3 +1743,73 @@ def test_main_serves_persistent_runtime(monkeypatch):
     serve.assert_called_once_with(
         adapter.ClaudeRuntime, config_loader=AgentConfig.from_mapping
     )
+
+
+@pytest.mark.parametrize("limit", [1, 33554432])
+def test_build_options_passes_max_buffer_size(claude_payload, limit):
+    claude_payload["config"]["harness"]["settings"]["max_buffer_size"] = limit
+    assert build_options(claude_payload).max_buffer_size == limit
+
+
+def test_build_options_omits_max_buffer_size(claude_payload):
+    assert build_options(claude_payload).max_buffer_size is None
+
+
+@pytest.mark.parametrize(
+    "limit", [None, True, False, 1.0, "synthetic-private-value", 0, -1]
+)
+def test_build_options_rejects_invalid_max_buffer_before_staging(
+    claude_payload, monkeypatch, limit
+):
+    claude_payload["config"]["harness"]["settings"]["max_buffer_size"] = limit
+    skills = MagicMock()
+    mcp = MagicMock()
+    monkeypatch.setattr(adapter, "_stage_skill_plugin", skills)
+    monkeypatch.setattr(adapter, "_stage_mcp_config", mcp)
+    with pytest.raises(adapter.AdapterConfigError) as caught:
+        build_options(claude_payload)
+    assert caught.value.code == "claude_invalid_configuration"
+    assert str(caught.value) == "max_buffer_size must be a positive integer"
+    skills.assert_not_called()
+    mcp.assert_not_called()
+
+
+@pytest.mark.parametrize("fragmented", [False, True])
+@pytest.mark.parametrize("limit", [None, 33554432, 65536])
+async def test_configured_buffer_reaches_sdk_transport(
+    claude_payload, fragmented, limit
+):
+    if limit is not None:
+        claude_payload["config"]["harness"]["settings"]["max_buffer_size"] = limit
+    options = build_options(claude_payload)
+    message = {"type": "assistant", "content": "x" * (1024 * 1024 + 1)}
+    wire = json.dumps(message) + "\n"
+
+    async def stdout():
+        chunk_size = 65536 if fragmented else len(wire)
+        for offset in range(0, len(wire), chunk_size):
+            yield wire[offset : offset + chunk_size]
+
+    transport = SubprocessCLITransport(prompt="synthetic", options=options)
+    transport._process = MagicMock(wait=AsyncMock(return_value=0))
+    transport._stdout_stream = stdout()
+    if limit == 33554432:
+        assert [item async for item in transport.read_messages()] == [message]
+    else:
+        with pytest.raises(CLIJSONDecodeError):
+            _ = [item async for item in transport.read_messages()]
+
+
+async def test_configured_buffer_preserves_malformed_json_failure(claude_payload):
+    claude_payload["config"]["harness"]["settings"]["max_buffer_size"] = 33554432
+
+    async def stdout():
+        yield '{"broken":}\n'
+
+    transport = SubprocessCLITransport(
+        prompt="synthetic", options=build_options(claude_payload)
+    )
+    transport._process = MagicMock(wait=AsyncMock(return_value=0))
+    transport._stdout_stream = stdout()
+    with pytest.raises(CLIJSONDecodeError):
+        _ = [item async for item in transport.read_messages()]

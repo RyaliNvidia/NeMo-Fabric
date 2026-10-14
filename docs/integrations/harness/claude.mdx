@@ -78,7 +78,10 @@ preserves the `claude_code` preset and adds the configured content after it.
 - `permission_mode`: `default`, `acceptEdits`, `bypassPermissions`, `plan`,
   `dontAsk`, or `auto`
 - `max_budget_usd`: a number greater than `0`
+- `max_buffer_size`: a positive integer bounding one Claude Code stdout JSON message; omission preserves the SDK default
 - `setting_sources`: an array containing `user`, `project`, or `local`
+
+The buffer limit remains finite: larger messages fail without truncation. Explicit null, booleans, and non-integer values are invalid.
 
 Planning rejects unknown keys, invalid types, and invalid values before the
 Claude runtime starts. When `permission_mode` is `dontAsk`, tools listed in

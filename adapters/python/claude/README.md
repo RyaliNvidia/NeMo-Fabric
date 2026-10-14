@@ -109,8 +109,11 @@ Only Claude-specific controls belong in `harness.settings`:
 | Setting | Type | Required | Static default |
 | --- | --- | --- | --- |
 | `permission_mode` | One of `default`, `acceptEdits`, `bypassPermissions`, `plan`, `dontAsk`, or `auto` | No | No default |
+| `max_buffer_size` | Integer greater than or equal to `1` | No | SDK default |
 | `max_budget_usd` | Number greater than `0` | No | No default |
 | `setting_sources` | Array containing `user`, `project`, or `local` | No | `[]` |
+
+`max_buffer_size` passes directly to the Claude Agent SDK and bounds one stdout JSON message, including tool results and encrypted continuation. A finite limit still rejects oversized messages; it does not truncate their contents. Omission preserves the SDK default. The adapter rejects null and non-integer values.
 
 Planning validates these settings against the schema in the resolved Claude
 descriptor. Unknown keys and invalid values fail before the adapter starts.

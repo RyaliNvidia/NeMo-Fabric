@@ -639,6 +639,16 @@ def build_options(
         raise AdapterConfigError(
             "claude_invalid_configuration", "permission_mode is invalid"
         )
+    max_buffer_size = settings.get("max_buffer_size")
+    if "max_buffer_size" in settings and (
+        isinstance(max_buffer_size, bool)
+        or not isinstance(max_buffer_size, int)
+        or max_buffer_size < 1
+    ):
+        raise AdapterConfigError(
+            "claude_invalid_configuration",
+            "max_buffer_size must be a positive integer",
+        )
     max_turns = config.runtime.max_turns if config.runtime is not None else None
     max_budget = settings.get("max_budget_usd")
     if max_budget is not None:
@@ -698,6 +708,7 @@ def build_options(
             permission_mode=permission_mode,
             max_turns=max_turns,
             max_budget_usd=max_budget,
+            max_buffer_size=max_buffer_size,
             setting_sources=sources,
             cli_path=_resolve_path(base_dir, cli_path) if cli_path else None,
             mcp_servers=mcp.config_path if mcp is not None else {},
@@ -816,7 +827,11 @@ def sdk_failure(error: BaseException) -> dict[str, Any]:
             exit_code=error.exit_code,
         )
     if isinstance(error, CLIJSONDecodeError):
-        return _failure("claude_invalid_json", "Claude Code returned invalid JSON")
+        return _failure(
+            "claude_invalid_json",
+            "Claude Code returned invalid JSON or a message exceeding "
+            "the configured buffer limit",
+        )
     if isinstance(error, MessageParseError):
         return _failure("claude_message_parse_failed", "Claude message parsing failed")
     return _failure("claude_failed", "Claude invocation failed")
